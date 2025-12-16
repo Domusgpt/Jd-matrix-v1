@@ -6,6 +6,7 @@ import { QuantumVisualizer } from './Visualizer/HolographicVisualizer';
 import { generatePlayerHTML } from '../services/playerExport';
 import { STYLE_PRESETS } from '../constants';
 import { useAudioPlayer } from '../hooks/useAudioPlayer';
+import { useKineticGraph, KineticNode } from '../hooks/useKineticGraph';
 
 interface Step4Props {
   state: AppState;
@@ -27,19 +28,22 @@ export const Step4Preview: React.FC<Step4Props> = ({ state, onGenerateMore, onSp
   const urlInputRef = useRef<HTMLInputElement>(null);
   
   // -- Audio System --
-  const { 
-      audioElement, 
-      isPlaying, 
+  const {
+      audioElement,
+      isPlaying,
       isMicActive,
       isEmbedActive,
       embedUrl,
       serviceType,
-      togglePlay, 
-      toggleMic, 
+      togglePlay,
+      toggleMic,
       loadStreamUrl,
       getAnalysis,
-      audioDestNode 
+      getLookaheadAnalysis,
+      audioDestNode
   } = useAudioPlayer(state.audioPreviewUrl);
+
+  const kineticGraph = useKineticGraph();
 
   const [isRecording, setIsRecording] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -278,19 +282,36 @@ export const Step4Preview: React.FC<Step4Props> = ({ state, onGenerateMore, onSp
         if (transitionProgressRef.current > 1.0) transitionProgressRef.current = 1.0;
     }
 
-    const { bass, mid, high, energy } = getAnalysis();
+    const currentAnalysis = getAnalysis();
+    const predictedAnalysis = getLookaheadAnalysis(200);
+    const { bass, mid, high, energy } = currentAnalysis;
+
+    // Shared cues: rhythm leans on bass while borrowing a slice of atmosphere; atmosphere still hears the thump.
+    const rhythmPulse = (predictedAnalysis.bass * 0.65) + (bass * 0.35);
+    const atmosphereLift = (predictedAnalysis.mid * 0.55) + (predictedAnalysis.high * 0.45);
+    const sharedGlow = Math.min(1, (energy * 0.25) + (atmosphereLift * 0.75));
+
+    // Visualizer gets a fuller atmospheric diet but keeps rhythm in the mix so both layers share timing DNA.
+    const visualizerAudio = {
+        bass: Math.min(1, rhythmPulse),
+        mid: Math.min(1, (atmosphereLift * 0.8) + (rhythmPulse * 0.2)),
+        high: Math.min(1, (predictedAnalysis.high * 0.7) + (high * 0.3)),
+        energy: Math.min(1, (sharedGlow + predictedAnalysis.energy) * 0.5)
+    };
     
     // SEQUENCER LOGIC: Gather all "Sequencer" decks
     const seqDecks = decks.filter(d => d.isActive && d.rig && d.mixMode === 'sequencer');
     const refDeck = seqDecks[0]; // Primary logic driver, but pools are shared
+
+    let graphNode = kineticGraph.getCurrentNode();
 
     // --- PHYSICS SOLVER (Springs) ---
     const sensitivity = (state.reactivity || 80) / 100;
     const stiffness = 140; 
     const damping = 8;
     
-    let targetRotX = bass * 35.0 * sensitivity; 
-    let targetRotY = mid * 25.0 * Math.sin(time * 0.005) * sensitivity; 
+    let targetRotX = rhythmPulse * 35.0 * sensitivity;
+    let targetRotY = (mid * 0.5 + atmosphereLift * 0.5) * 25.0 * Math.sin(time * 0.005) * sensitivity;
     
     if (sequenceModeRef.current === 'FOOTWORK') {
         targetRotX += 20; // Look down
@@ -301,12 +322,31 @@ export const Step4Preview: React.FC<Step4Props> = ({ state, onGenerateMore, onSp
     masterVelYRef.current += ((targetRotY - masterRotYRef.current) * stiffness * 0.5 - (masterVelYRef.current * damping * 0.8)) * deltaTime;
     masterRotYRef.current += masterVelYRef.current * deltaTime;
 
-    // Visualizer Render
+    // Visualizer Render (shares rhythm timing but leans atmospheric for color/morph)
     if (hologramRef.current) {
-        hologramRef.current.updateAudio({ bass, mid, high, energy });
-        const rx = superCamActive ? masterRotXRef.current * 0.3 : 0;
-        const ry = superCamActive ? masterRotYRef.current * 0.3 : 0;
-        hologramRef.current.render(0, { x: rx, y: ry, z: 0 }); 
+        const dropLead = predictedAnalysis.bass > 0.65;
+        const swellLead = atmosphereLift > 0.55;
+
+        hologramRef.current.params = {
+            ...hologramRef.current.params,
+            hue: 200 + (visualizerAudio.mid * 80) + (visualizerAudio.bass * 20),
+            morph: 0.1 + (visualizerAudio.mid * 0.35) + (visualizerAudio.high * 0.15),
+            chaos: 0.35 + (visualizerAudio.high * 0.4),
+            intensity: 0.5 + (visualizerAudio.bass * 0.4) + (sharedGlow * 0.2)
+        };
+
+        // Nudge the hologram center so pans/zooms share cues with the dancer.
+        const panX = (atmosphereLift - 0.5) * 0.35;
+        const panY = (visualizerAudio.high - 0.5) * 0.25;
+        hologramRef.current.targetMouse.x = panX;
+        hologramRef.current.targetMouse.y = panY;
+
+        hologramRef.current.updateAudio(visualizerAudio);
+        const rx = superCamActive ? (masterRotXRef.current * 0.3) + (dropLead ? -0.15 : 0) : 0;
+        const ry = superCamActive ? (masterRotYRef.current * 0.35) + (swellLead ? 0.1 : 0) : 0;
+        const rz = superCamActive ? ((visualizerAudio.high - 0.5) * 0.3) : 0;
+        const cameraZ = dropLead ? -0.35 : (sharedGlow * -0.1);
+        hologramRef.current.render(cameraZ, { x: rx, y: ry, z: rz });
     }
 
     const now = Date.now();
@@ -346,58 +386,122 @@ export const Step4Preview: React.FC<Step4Props> = ({ state, onGenerateMore, onSp
              }
         }
     }
-    else if ((now - lastBeatTimeRef.current) > 300 && bass > 0.5 && seqDecks.length > 0) {
-        // --- INTELLIGENT SEQUENCER ---
+    else if ((now - lastBeatTimeRef.current) > 300 && predictedAnalysis.bass > 0.45 && seqDecks.length > 0) {
+        // --- KINETIC GRAPH SEQUENCER ---
         lastBeatTimeRef.current = now;
         barCounterRef.current = (barCounterRef.current + 1) % 16;
-        phraseCounterRef.current = (phraseCounterRef.current + 1) % 8; 
-        
-        const isDrop = bass > 0.8; 
-        const isPeak = high > 0.7; 
-        const isFill = phraseCounterRef.current === 7; 
+        phraseCounterRef.current = (phraseCounterRef.current + 1) % 8;
+
+        graphNode = kineticGraph.advance(predictedAnalysis);
+
+        const isDrop = predictedAnalysis.bass > 0.75;
+        const isPeak = predictedAnalysis.high > 0.65;
+        const isFill = phraseCounterRef.current === 7;
+
+        const hasCloseups = seqDecks.some(d => d.closeups && d.closeups.length > 0);
+        const hasHands = seqDecks.some(d => d.hands && d.hands.length > 0);
+        const hasFeet = seqDecks.some(d => d.feet && d.feet.length > 0);
 
         if (triggerReverseRef.current) {
              sequenceModeRef.current = 'GROOVE';
         } else {
-            // Check global pool capabilities
-            const hasCloseups = seqDecks.some(d => d.closeups && d.closeups.length > 0);
-            const hasHands = seqDecks.some(d => d.hands && d.hands.length > 0);
-            const hasFeet = seqDecks.some(d => d.feet && d.feet.length > 0);
-
-            if (isPeak && hasCloseups) sequenceModeRef.current = 'EMOTE';
-            else if (isDrop && hasHands) sequenceModeRef.current = 'IMPACT';
-            else if (barCounterRef.current >= 12 && hasFeet) sequenceModeRef.current = 'FOOTWORK';
-            else if (isFill) sequenceModeRef.current = 'IMPACT';
-            else sequenceModeRef.current = 'GROOVE';
+            switch (graphNode.id) {
+                case 'crouch':
+                    sequenceModeRef.current = hasFeet ? 'FOOTWORK' : 'GROOVE';
+                    break;
+                case 'jump':
+                    sequenceModeRef.current = hasCloseups && isPeak ? 'EMOTE' : 'IMPACT';
+                    break;
+                default:
+                    sequenceModeRef.current = 'GROOVE';
+            }
         }
-        
+
         if (Math.random() * 100 < fxSettings.chaos.base) {
              sequenceModeRef.current = 'IMPACT';
         }
 
         // --- GLOBAL FRAME POOLING ---
-        // Helper to grab frames from ALL sequencer decks
         const gatherFrames = (selector: (d: DeckSlot) => GeneratedFrame[] | undefined) => {
             return seqDecks.flatMap(d => {
                 const frames = selector(d) || [];
-                return frames.map(f => ({...f, deckId: d.id})); // Ensure deckID is attached
+                return frames.map(f => ({...f, deckId: d.id}));
             });
         };
 
         let pool: GeneratedFrame[] = [];
         let nextMode: InterpMode = 'CUT';
-        
+
+        const applyMechanicalFx = (pose: string, node: KineticNode): { pose: string; mode: InterpMode } => {
+            let resolvedPose = pose;
+            let resolvedMode: InterpMode = nextMode;
+
+            if (node.mechanicalFx === 'mirror' && !pose.includes('_mirror')) {
+                resolvedPose = `${pose}_mirror`;
+            }
+            if (node.mechanicalFx === 'zoom') {
+                resolvedMode = 'ZOOM_IN';
+                camZoomRef.current = Math.max(camZoomRef.current, 1.35);
+            }
+            if (node.mechanicalFx === 'stutter') {
+                triggerStutterRef.current = true;
+            }
+
+            return { pose: resolvedPose, mode: resolvedMode };
+        };
+
+        const selectFrameForNode = (node: KineticNode): { frame: GeneratedFrame | null; mode: InterpMode } => {
+            switch (node.id) {
+                case 'lean_left': {
+                    const frames = gatherFrames(d => d.framesByEnergy?.mid.filter(f => f.direction === 'left'));
+                    if (frames.length) return { frame: frames[Math.floor(Math.random() * frames.length)], mode: 'CUT' };
+                    break;
+                }
+                case 'lean_right': {
+                    const frames = gatherFrames(d => d.framesByEnergy?.mid.filter(f => f.direction === 'right'));
+                    if (frames.length) return { frame: frames[Math.floor(Math.random() * frames.length)], mode: 'CUT' };
+                    break;
+                }
+                case 'crouch': {
+                    const feetFrames = gatherFrames(d => d.feet);
+                    if (feetFrames.length) return { frame: feetFrames[Math.floor(Math.random() * feetFrames.length)], mode: 'CUT' };
+                    const lowFrames = gatherFrames(d => d.framesByEnergy?.low);
+                    if (lowFrames.length) return { frame: lowFrames[Math.floor(Math.random() * lowFrames.length)], mode: 'CUT' };
+                    break;
+                }
+                case 'jump': {
+                    let jumpPool: GeneratedFrame[] = [];
+                    if (isDrop) jumpPool = gatherFrames(d => d.mandalas);
+                    if (jumpPool.length === 0 && isFill) jumpPool = gatherFrames(d => d.acrobatics);
+                    if (jumpPool.length === 0 && hasHands) jumpPool = gatherFrames(d => d.hands);
+                    if (jumpPool.length === 0) jumpPool = gatherFrames(d => d.framesByEnergy?.high);
+                    if (jumpPool.length) return { frame: jumpPool[Math.floor(Math.random() * jumpPool.length)], mode: 'ZOOM_IN' };
+                    break;
+                }
+                case 'idle':
+                default: {
+                    const dir = barCounterRef.current % 2 === 0 ? 'left' : 'right';
+                    let basePool = gatherFrames(d => d.framesByEnergy?.mid.filter(f => f.direction === dir));
+                    if (basePool.length === 0) basePool = gatherFrames(d => d.framesByEnergy?.mid);
+                    if (basePool.length === 0) basePool = gatherFrames(d => d.framesByEnergy?.low);
+                    if (basePool.length) return { frame: basePool[Math.floor(Math.random() * basePool.length)], mode: 'CUT' };
+                    break;
+                }
+            }
+            return { frame: null, mode: 'CUT' };
+        };
+
         switch (sequenceModeRef.current) {
             case 'EMOTE':
-                if (isPeak) {
-                     pool = gatherFrames(d => d.virtuals);
-                     if (pool.length === 0) pool = gatherFrames(d => d.closeups);
-                     nextMode = 'CUT';
-                } else {
-                     pool = gatherFrames(d => d.closeups);
-                     nextMode = 'MORPH'; 
+                if (isPeak && hasCloseups) {
+                    pool = gatherFrames(d => d.virtuals);
+                    if (pool.length === 0) pool = gatherFrames(d => d.closeups);
+                    nextMode = 'CUT';
+                } else if (hasCloseups) {
+                    pool = gatherFrames(d => d.closeups);
+                    nextMode = 'MORPH';
                 }
-                camZoomRef.current = 1.5; 
+                camZoomRef.current = 1.45;
                 break;
             case 'FOOTWORK':
                 pool = gatherFrames(d => d.feet);
@@ -406,40 +510,45 @@ export const Step4Preview: React.FC<Step4Props> = ({ state, onGenerateMore, onSp
             case 'IMPACT':
                 if (isDrop) pool = gatherFrames(d => d.mandalas);
                 if (pool.length === 0 && isFill) pool = gatherFrames(d => d.acrobatics);
-                if (pool.length === 0) pool = gatherFrames(d => d.hands);
+                if (pool.length === 0 && hasHands) pool = gatherFrames(d => d.hands);
                 if (pool.length === 0) pool = gatherFrames(d => d.framesByEnergy?.high);
                 nextMode = 'CUT';
                 break;
             case 'GROOVE':
-            default:
-                const dir = barCounterRef.current % 2 === 0 ? 'left' : 'right';
-                pool = gatherFrames(d => d.framesByEnergy?.mid.filter(f => f.direction === dir));
-                if (pool.length === 0) pool = gatherFrames(d => d.framesByEnergy?.mid);
-                if (pool.length === 0) pool = gatherFrames(d => d.framesByEnergy?.low);
-                
-                nextMode = 'CUT';
-                charSquashRef.current = 0.85; 
-                charBounceYRef.current = -50 * bass * sensitivity; 
+            default: {
+                const selection = selectFrameForNode(graphNode);
+                if (selection.frame) pool = [selection.frame];
+                nextMode = selection.mode;
+                charSquashRef.current = 0.85;
+                charBounceYRef.current = -50 * rhythmPulse * sensitivity;
                 break;
+            }
+        }
+
+        if (pool.length === 0) {
+            const fallback = selectFrameForNode(graphNode);
+            if (fallback.frame) pool = [fallback.frame];
         }
 
         if (pool.length > 0) {
             const nextFrame = pool[Math.floor(Math.random() * pool.length)];
-            // Pass the specific Deck ID of the chosen frame
-            triggerTransition(nextFrame.pose, nextFrame.deckId || 0, nextMode);
+            const mechanical = applyMechanicalFx(nextFrame.pose, graphNode);
+            triggerTransition(mechanical.pose, nextFrame.deckId || 0, mechanical.mode || nextMode);
         }
     }
 
     // --- PHYSICS DECAY ---
     charSquashRef.current += (1.0 - charSquashRef.current) * (12 * deltaTime);
-    charBounceYRef.current += (0 - charBounceYRef.current) * (10 * deltaTime); 
+    charBounceYRef.current += (0 - charBounceYRef.current) * (10 * deltaTime);
     charSkewRef.current *= 0.9;
     rgbSplitRef.current *= 0.9;
-    
+
     const targetZoom = sequenceModeRef.current === 'EMOTE' ? 1.5 : BASE_ZOOM;
     camZoomRef.current += (targetZoom - camZoomRef.current) * (2 * deltaTime);
-    
-    const targetPanY = sequenceModeRef.current === 'FOOTWORK' ? -150 : 0; 
+
+    const targetPanX = (atmosphereLift - 0.5) * 90 * sensitivity;
+    const targetPanY = sequenceModeRef.current === 'FOOTWORK' ? -150 : 0;
+    camPanXRef.current += (targetPanX - camPanXRef.current) * (3 * deltaTime);
     camPanYRef.current += (targetPanY - camPanYRef.current) * (4 * deltaTime);
     
     // --- RENDERER ---
