@@ -16,5 +16,12 @@ View your app in AI Studio: https://ai.studio/apps/drive/11Gb6YS30kXVHqfKjeNe-_0
 1. Install dependencies:
    `npm install`
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+   - For command-line builds, export `API_KEY` or `GEMINI_API_KEY` in your shell so Vite can inject it at compile time.
 3. Run the app:
    `npm run dev`
+
+## Testing & QA
+
+- **Quick verification:** `npm run build` (requires `API_KEY` or `GEMINI_API_KEY` in the environment).
+- **Manual visual check:** run `npm run dev -- --host` and exercise Step 4 transitions to confirm kinetic graph responses against the audio lookahead.
+- **Recording/exports:** ensure microphone permissions and recording destinations are available before capturing test footage.
