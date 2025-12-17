@@ -22,23 +22,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-
-# Binary and capture artifacts
-artifacts/
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.mp4
-*.mov
-*.webm
-*.wav
-*.mp3
-*.ogg
-*.aac
-*.zip
-
-# Playwright artifacts
-playwright-report/
-test-results/
-trace.zip
