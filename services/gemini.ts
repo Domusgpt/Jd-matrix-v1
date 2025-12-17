@@ -1,7 +1,9 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { GeneratedFrame, PoseType, EnergyLevel, SubjectCategory, FrameType, SheetRole, MoveDirection } from "../types";
-import { requireApiKey } from "./apiKey";
+
+// Strict API Key usage as per guidelines
+const API_KEY = process.env.API_KEY;
 
 // --- UTILITIES ---
 
@@ -449,8 +451,9 @@ export const generateDanceFrames = async (
   onFrameUpdate: (frames: GeneratedFrame[]) => void 
 ): Promise<{ frames: GeneratedFrame[], category: SubjectCategory }> => {
 
-  const { key: apiKey } = requireApiKey();
-  const ai = new GoogleGenAI({ apiKey });
+  if (!API_KEY) throw new Error("API Key is missing.");
+
+  const ai = new GoogleGenAI({ apiKey: API_KEY });
   const masterSeed = Math.floor(Math.random() * 2147483647);
   let category: SubjectCategory = 'CHARACTER';
   if (/logo|text|word|letter|font|typography/i.test(motionPrompt)) category = 'TEXT';

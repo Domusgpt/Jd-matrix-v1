@@ -13,7 +13,6 @@ export interface AudioPlayer {
     loadAudio: (url: string) => void;
     loadStreamUrl: (url: string) => void;
     getAnalysis: () => AudioAnalysis;
-    getLookaheadAnalysis: (offsetMs?: number) => AudioAnalysis;
     audioDestNode: MediaStreamAudioDestinationNode | null; // For recording
 }
 
@@ -30,7 +29,6 @@ export const useAudioPlayer = (initialUrl?: string | null): AudioPlayer => {
     const sourceNodeRef = useRef<MediaElementAudioSourceNode | MediaStreamAudioSourceNode | null>(null);
     const audioDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
     const micStreamRef = useRef<MediaStream | null>(null);
-    const historyRef = useRef<{ time: number; snapshot: AudioAnalysis }[]>([]);
     
     // The actual audio element for local/direct files
     const audioRef = useRef<HTMLAudioElement>(new Audio());
@@ -222,7 +220,7 @@ export const useAudioPlayer = (initialUrl?: string | null): AudioPlayer => {
         setIsMicActive(false);
     };
 
-    const sampleAnalysis = useCallback((): AudioAnalysis => {
+    const getAnalysis = useCallback((): AudioAnalysis => {
         if (!analyserRef.current) return { bass: 0, mid: 0, high: 0, energy: 0 };
 
         const bufferLength = analyserRef.current.frequencyBinCount;
@@ -230,9 +228,9 @@ export const useAudioPlayer = (initialUrl?: string | null): AudioPlayer => {
         analyserRef.current.getByteFrequencyData(dataArray);
 
         // Bands
-        const bassRange = dataArray.slice(0, 5);
-        const midRange = dataArray.slice(5, 30);
-        const highRange = dataArray.slice(30, 100);
+        const bassRange = dataArray.slice(0, 5); 
+        const midRange = dataArray.slice(5, 30); 
+        const highRange = dataArray.slice(30, 100); 
 
         const bass = bassRange.reduce((a, b) => a + b, 0) / (bassRange.length * 255);
         const mid = midRange.reduce((a, b) => a + b, 0) / (midRange.length * 255);
@@ -241,54 +239,6 @@ export const useAudioPlayer = (initialUrl?: string | null): AudioPlayer => {
 
         return { bass, mid, high, energy };
     }, []);
-
-    const getAnalysis = useCallback((): AudioAnalysis => {
-        const snapshot = sampleAnalysis();
-        const now = performance.now();
-        historyRef.current.push({ time: now, snapshot });
-        if (historyRef.current.length > 48) historyRef.current.shift();
-        return snapshot;
-    }, [sampleAnalysis]);
-
-    const getLookaheadAnalysis = useCallback((offsetMs: number = 200): AudioAnalysis => {
-        const history = historyRef.current;
-        if (history.length < 2) {
-            const fallback = history[0]?.snapshot;
-            return fallback || getAnalysis();
-        }
-
-        const recent = history.slice(-12);
-        const baseTime = recent[0].time;
-
-        const projectValue = (selector: (a: AudioAnalysis) => number) => {
-            const values = recent.map(h => selector(h.snapshot));
-            const times = recent.map(h => h.time - baseTime);
-            const n = values.length;
-
-            const meanT = times.reduce((a, b) => a + b, 0) / n;
-            const meanV = values.reduce((a, b) => a + b, 0) / n;
-
-            let cov = 0;
-            let varT = 0;
-            for (let i = 0; i < n; i++) {
-                const dt = times[i] - meanT;
-                cov += dt * (values[i] - meanV);
-                varT += dt * dt;
-            }
-
-            const slope = varT > 0 ? cov / varT : 0;
-            const latest = values[values.length - 1];
-            const projected = latest + slope * offsetMs;
-            return Math.min(Math.max(projected, 0), 1);
-        };
-
-        return {
-            bass: projectValue(s => s.bass),
-            mid: projectValue(s => s.mid),
-            high: projectValue(s => s.high),
-            energy: projectValue(s => s.energy)
-        };
-    }, [getAnalysis]);
 
     // Cleanup
     useEffect(() => {
@@ -314,7 +264,6 @@ export const useAudioPlayer = (initialUrl?: string | null): AudioPlayer => {
         loadAudio,
         loadStreamUrl,
         getAnalysis,
-        getLookaheadAnalysis,
         audioDestNode: audioDestRef.current
     };
 };
