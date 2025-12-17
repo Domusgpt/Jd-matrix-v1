@@ -4,7 +4,7 @@ name: Deploy Jekyll with GitHub Pages dependencies preinstalled
 on:
   # Runs on pushes targeting the default branch
   push:
-    branches: ["main"]
+    branches: ["2025-12-16/23-08-11set-up-testing-environment-for-kinetic-corecodex"]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
