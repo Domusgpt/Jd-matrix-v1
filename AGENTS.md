@@ -115,3 +115,16 @@ service cloud.firestore {
 2.  **Verify Output**
     *   Capture the "Hosting URL" from the console output.
     *   Ping the URL to ensure 200 OK.
+
+## Project quick facts (jusDNCE)
+
+- Kinetic Core fuses MJ-style rigid grids with a directed pose graph and lookahead audio analysis; background hologram stays in lockstep but leans atmospheric (mid/high) while the dancer keys off rhythm (bass) plus shared lift.
+- Render loop coordinates 6DOF camera pans/zooms/rolls, orbital overlays, negative/stripe flashes, and a telemetry HUD + session log for QA.
+- Builds require `API_KEY` (or `GEMINI_API_KEY`) in the environment; `.env.example` maps both for local shells.
+
+## Testing & tooling expectations
+
+- **Build:** `npm run build` (with `API_KEY` exported) remains the primary check.
+- **E2E smoke:** `npm run test:e2e` runs Playwright and auto-starts Vite on port 4173 with a dummy API key; traces are retained on failure.
+- **Screenshots:** prefer `browser_container` (or the in-app SNAP control) for visual changes; keep captured artifacts out of git (`artifacts/`, `*.png` are ignored).
+- **Telemetry review:** enable the HUD and session log in Step 4 during QA to confirm lookahead, pose, and deck cues are in sync with audio.
