@@ -16,7 +16,7 @@ concurrency:
 
 env:
   NODE_VERSION: 18
-  BASE_PATH: '/${{ github.event.repository.name }}/'
+  BASE_PATH: ${{ format('/{0}/', github.event.repository.name) }}
 
 jobs:
   build:

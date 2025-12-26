@@ -61,3 +61,7 @@
 - Set Vite `base` to respect `VITE_BASE_PATH` and added a `postbuild` copy to generate `404.html` so SPA routing works on Pages without black screens.
 - Updated README and `.env.example` to document the Pages flow and base-path variable for local parity.
 - Testing: `API_KEY=dummy npm run build`; `API_KEY=dummy npm run test:e2e`.
+
+## 2025-12-26T00:10:00Z
+- Hardened the GitHub Pages workflow by formatting the repo-scoped base path via `format('/{0}/', repo)` to avoid YAML parsing issues in Actions while keeping Vite asset paths aligned with Pages subpaths.
+- Testing: `API_KEY=dummy npm run build` (workflow config change only).
