@@ -69,3 +69,7 @@
 ## 2025-12-26T12:00:00Z
 - Simplified the GitHub Pages base-path expression to a literal `"/${{ github.event.repository.name }}/"` to eliminate remaining YAML parsing complaints while keeping subpath assets aligned.
 - Testing: `API_KEY=dummy npm run build` (workflow config change only).
+
+## 2025-12-26T18:00:00Z
+- Corrected the Pages workflow to compute `BASE_PATH` via `format('/{0}/', github.event.repository.name)` so Vite assets resolve under the GitHub Pages subpath instead of the literal expression string.
+- Testing: `API_KEY=dummy npm run build`; `API_KEY=dummy npm run test:e2e`.

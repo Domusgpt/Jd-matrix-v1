@@ -16,8 +16,8 @@ concurrency:
 
 env:
   NODE_VERSION: 18
-  # Use a literal expression string to avoid YAML parsing edge cases
-  BASE_PATH: "/${{ github.event.repository.name }}/"
+  # Resolve the Pages subpath from the repo name so Vite assets load under the GitHub Pages URL
+  BASE_PATH: ${{ format('/{0}/', github.event.repository.name) }}
 
 jobs:
   build:
