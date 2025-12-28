@@ -73,3 +73,8 @@
 ## 2025-12-26T18:00:00Z
 - Corrected the Pages workflow to compute `BASE_PATH` via `format('/{0}/', github.event.repository.name)` so Vite assets resolve under the GitHub Pages subpath instead of the literal expression string.
 - Testing: `API_KEY=dummy npm run build`; `API_KEY=dummy npm run test:e2e`.
+
+## 2025-12-27T12:30:00Z
+- Hardened the GitHub Pages workflow by scoping permissions per job, forcing a `.nojekyll` marker into the built bundle, and reiterating that the Pages source must be set to “GitHub Actions” to avoid legacy Jekyll/doc builds failing on `/docs`.
+- Updated README with the Pages source requirement and the `.nojekyll` safeguard so future deployments bypass the docs-based Jekyll path.
+- Testing: `API_KEY=dummy npm run build`; `API_KEY=dummy npm run test:e2e`.
