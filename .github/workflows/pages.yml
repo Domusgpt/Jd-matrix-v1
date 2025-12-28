@@ -22,21 +22,13 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure Pages
+      - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v5
-        with:
-          # Prevent the managed Pages job from invoking the Jekyll builder; we are
-          # uploading a pre-built Vite bundle so no static-site generator is needed.
-          static_site_generator: none
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -74,19 +66,15 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          name: github-pages
           path: ./dist
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy to GitHub Pages
-        id: deploy
+        id: deployment
         uses: actions/deploy-pages@v4

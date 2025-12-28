@@ -86,3 +86,7 @@
 ## 2025-12-27T22:00:00Z
 - Moved `actions/configure-pages@v5` ahead of the build, named the upload artifact, and kept the repo-scoped base path so Pages consumes the prebuilt Vite bundle without invoking the managed Jekyll builder.
 - Testing: `API_KEY=dummy npm run build`; `API_KEY=dummy npm run test:e2e` (workflow config change).
+
+## 2025-12-28T10:00:00Z
+- Simplified the Pages workflow to the official Actions template (configure, build, upload, deploy) so GitHub stops invoking the legacy Jekyll builder that expected `/docs`.
+- Testing: `API_KEY=dummy npm run build`; `API_KEY=dummy npm run test:e2e`.
