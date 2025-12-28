@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [2025-12-28/17-42-52set-up-testing-environment-for-kinetic-corecodex]
   workflow_dispatch:
 
 permissions:
